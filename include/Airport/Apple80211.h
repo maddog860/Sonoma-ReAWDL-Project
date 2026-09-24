@@ -15,6 +15,7 @@
 #ifdef IO80211FAMILY_V2
 #include "IO80211WorkQueue.h"
 #include "IO80211ControllerV2.h"
+#include "IO80211AWDLProtocol.h"
 #include "IO80211InfraInterface.h"
 #include "IO80211InfraProtocol.h"
 #include "IOSkywalkPacketBufferPool.h"

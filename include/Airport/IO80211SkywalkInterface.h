@@ -21,7 +21,30 @@ class TxSubmissionDequeueStats;
 class TxCompletionEnqueueStats;
 class IO80211NetworkPacket;
 class PacketSkywalkScratch;
+#ifndef ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED
+#define ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED
+
+#if defined(IO80211FAMILY_V2)
+
+struct IO80211FlowQueueHash
+{
+    UInt8 ac;
+    UInt8 interface;
+    ether_addr address;
+} __attribute__((packed));
+
+static_assert(
+    sizeof(IO80211FlowQueueHash) == 8,
+    "IO80211FlowQueueHash ABI size mismatch"
+);
+
+#else
+
 typedef UInt64 IO80211FlowQueueHash;
+
+#endif
+
+#endif /* ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED */
 class IO80211Peer;
 class CCPipe;
 class IO80211APIUserClient;
@@ -39,6 +62,8 @@ struct userPrintCtx;
 struct apple80211_lqm_summary;
 struct apple80211_infra_specific_stats;
 
+#ifndef ITLWM_TXPACKETREQUEST_DEFINED
+#define ITLWM_TXPACKETREQUEST_DEFINED
 struct TxPacketRequest {
     uint16_t    unk1;       // 0
     uint16_t    t;       // 2
@@ -52,6 +77,7 @@ struct TxPacketRequest {
     mbuf_t      bufs[8];    // 18
     uint32_t    reqTx;
 };
+#endif // ITLWM_TXPACKETREQUEST_DEFINED
 
 static_assert(sizeof(struct TxPacketRequest) == 0x60, "TxPacketRequest size error");
 
@@ -82,6 +108,8 @@ public:
     virtual void *getSupportedMediaArray(UInt *,UInt *) APPLE_KEXT_OVERRIDE;
     virtual UInt32 getFeatureFlags(void) APPLE_KEXT_OVERRIDE;
     virtual const char *classNameOverride(void) APPLE_KEXT_OVERRIDE;
+
+    virtual int errnoFromReturn(int) APPLE_KEXT_OVERRIDE;
     virtual IOReturn setPromiscuousModeEnable(bool, UInt) APPLE_KEXT_OVERRIDE;
     virtual void *createPeerManager(void);
     virtual void postMessage(UInt,void *,unsigned long,bool);
@@ -146,10 +174,19 @@ public:
     virtual void *getWorkerMatchingDict(OSString *);
     virtual bool init(IOService *);
     virtual bool isInterfaceEnabled(void);
+#if __IO80211_TARGET >= __MAC_14_4
+    /*
+     * Sonoma 14.4+ returns the 6-byte ether_addr by value in RAX.
+     * The older pointer declaration causes the returned MAC bytes
+     * themselves to be interpreted as an address.
+     */
+    virtual ether_addr getSelfMacAddr(void);
+#else
     virtual ether_addr *getSelfMacAddr(void);
+#endif
     virtual void setSelfMacAddr(ether_addr *);
     virtual void *getPacketPool(OSString *);
-    virtual void *getLogger(void);
+    virtual void *getLogger(void) const;
     virtual IOReturn handleSIOCSIFADDR(void);
     virtual IOReturn debugHandler(apple80211_debug_command *);
     virtual void statsDump(void);
@@ -185,7 +222,7 @@ public:
     int getInterfaceRole();
     
 public:
-    char _data[0x118];
+    char _data[0x08];
 };
 
 #endif /* _IO80211SKYWALK_H */

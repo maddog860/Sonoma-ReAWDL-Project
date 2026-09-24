@@ -29,7 +29,30 @@ typedef UInt kIO80211InterfaceType;
 	*/
 #define kIO80211InterfaceClass     "IO80211Interface"
 
+#ifndef ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED
+#define ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED
+
+#if defined(IO80211FAMILY_V2)
+
+struct IO80211FlowQueueHash
+{
+    UInt8 ac;
+    UInt8 interface;
+    ether_addr address;
+} __attribute__((packed));
+
+static_assert(
+    sizeof(IO80211FlowQueueHash) == 8,
+    "IO80211FlowQueueHash ABI size mismatch"
+);
+
+#else
+
 typedef UInt64 IO80211FlowQueueHash;
+
+#endif
+
+#endif /* ITLWM_IO80211_FLOW_QUEUE_HASH_DEFINED */
 class RSNSupplicant;
 class IOTimerEventSource;
 class IOGatedOutputQueue;
@@ -53,6 +76,8 @@ struct apple80211_interface_availability;
 struct apple80211_pmk_cache_data;
 struct apple80211_ap_cmp_data;
 
+#ifndef ITLWM_TXPACKETREQUEST_DEFINED
+#define ITLWM_TXPACKETREQUEST_DEFINED
 struct TxPacketRequest {
     uint16_t    unk1;       // 0
     uint16_t    t;       // 2
@@ -66,6 +91,7 @@ struct TxPacketRequest {
     mbuf_t      bufs[8];    // 18
     uint32_t    reqTx;
 };
+#endif // ITLWM_TXPACKETREQUEST_DEFINED
 
 static_assert(sizeof(struct TxPacketRequest) == 0x60, "TxPacketRequest size error");
 

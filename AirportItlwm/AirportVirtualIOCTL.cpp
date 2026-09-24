@@ -9,9 +9,32 @@
 #include "AirportItlwm.hpp"
 
 
+extern const char* hexdump(uint8_t *buf, size_t len);
+
+struct apple80211_peer_service_request_probe {
+    uint32_t version;
+    uint8_t peer[APPLE80211_ADDR_LEN];
+    uint8_t delete_request;
+    uint8_t aw_offset;
+    uint32_t token;
+    uint16_t data_len;
+    uint16_t expect_fragmented_response;
+    uint8_t data[1];
+} __attribute__((packed));
+
+static_assert(__builtin_offsetof(
+    apple80211_peer_service_request_probe, data) == 20,
+    "peer service request header must be 20 bytes");
+
+
+
 SInt32 AirportItlwm::
 apple80211VirtualRequest(UInt request_type, int request_number, IO80211VirtualInterface *interface, void *data)
 {
+    if (!ml_at_interrupt_context())
+        XYLog("AIRPLAY TRACE: apple80211VirtualRequest req=%d type=%u iface=%p\\n",
+              request_number, request_type, interface);
+
     if (request_type != SIOCGA80211 && request_type != SIOCSA80211)
         return kIOReturnError;
     IOReturn ret = kIOReturnError;
@@ -59,6 +82,50 @@ apple80211VirtualRequest(UInt request_type, int request_number, IO80211VirtualIn
         case APPLE80211_IOC_SSID:
             IOCTL(request_type, SSID, apple80211_ssid_data);
             break;
+        case APPLE80211_IOC_AWDL_PEER_SERVICE_REQUEST: {
+            if (request_type != SIOCSA80211 || data == nullptr)
+                break;
+
+            auto *r =
+                reinterpret_cast<apple80211_peer_service_request_probe *>(data);
+
+            XYLog("AIRPLAY PEER120: version=%u delete=%u aw_offset=%u "
+                  "token=%u data_len=%u fragmented=%u\n",
+                  r->version,
+                  r->delete_request,
+                  r->aw_offset,
+                  r->token,
+                  r->data_len,
+                  r->expect_fragmented_response);
+
+            /*
+             * Diagnostic only.
+             * Known requests are currently 18-25 payload bytes.
+             * Refuse unexpected large lengths rather than reading blindly.
+             */
+            if (r->data_len <= 64) {
+                const char *dump =
+                    hexdump((uint8_t *)r->data, r->data_len);
+
+                if (dump) {
+                    XYLog("AIRPLAY PEER120 DATA[%u]: %s\n",
+                          r->data_len, dump);
+
+                    IOFree((void *)dump,
+                           3 * r->data_len + 1);
+                }
+            } else {
+                XYLog("AIRPLAY PEER120: refusing suspicious data_len=%u\n",
+                      r->data_len);
+            }
+
+            /*
+             * Intentionally leave ret == kIOReturnError.
+             * This probe MUST NOT change driver behavior yet.
+             */
+            break;
+        }
+
         case APPLE80211_IOC_AWDL_PEER_TRAFFIC_REGISTRATION:
             IOCTL(request_type, AWDL_PEER_TRAFFIC_REGISTRATION, apple80211_awdl_peer_traffic_registration);
             break;
@@ -156,6 +223,8 @@ setAWDL_PEER_TRAFFIC_REGISTRATION(OSObject *object, struct apple80211_awdl_peer_
         bzero(name, 255);
         memcpy(name, data->name, data->name_len);
     }
+    IOLog("AIRPLAY TRAFFIC REG TRACE: name=%s name_len=%d active=%d\n",
+          name, data->name_len, data->active);
     XYLog("%s name=%s, name_len=%d, active=%d\n", __FUNCTION__, name, data->name_len, data->active);
     if (!strncmp(data->name, "wifid-assisted-discovery", data->name_len)) {
         if (data->active) {

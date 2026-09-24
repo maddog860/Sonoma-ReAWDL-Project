@@ -70,6 +70,10 @@ public:
     virtual IOService* probe(IOService* provider, SInt32* score) override;
     virtual bool start(IOService *provider) override;
     virtual void stop(IOService *provider) override;
+    virtual IO80211VirtualInterface *createVirtualInterface(ether_addr *ether, UInt role) override;
+    virtual bool attachInterface(OSObject *object, IOService *provider) override;
+
+    IOReturn probeAWDLInterfaceCreation(apple80211_virt_if_create_data *data);
     virtual IOReturn enable(IO80211SkywalkInterface *netif) override;
     virtual IOReturn disable(IO80211SkywalkInterface *netif) override;
     virtual IOReturn setHardwareAddress(const void *addr, UInt32 addrBytes) override;
@@ -126,6 +130,7 @@ public:
     virtual void *getFaultReporterFromDriver() override;
     
     virtual SInt32 apple80211_ioctl(IO80211SkywalkInterface *,unsigned long,void *, bool, bool) override;
+    virtual SInt32 apple80211VirtualRequest(UInt,int,IO80211VirtualInterface *,void *) override;
     virtual SInt32 apple80211SkywalkRequest(UInt,int,IO80211SkywalkInterface *,void *) override;
     virtual SInt32 apple80211SkywalkRequest(UInt,int,IO80211SkywalkInterface *,void *,void *) override;
 

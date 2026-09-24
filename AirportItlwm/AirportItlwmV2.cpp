@@ -13,10 +13,119 @@
 #include <net80211/ieee80211_var.h>
 
 #include "AirportItlwmSkywalkInterface.hpp"
+#include "AirportItlwmAWDLInterface.hpp"
 #include "IOPCIEDeviceWrapper.hpp"
 
 #define super IO80211Controller
 OSDefineMetaClassAndStructors(AirportItlwm, IO80211Controller);
+
+/*
+ * Experimental Intel-firmware -> Apple AWDL event bridge.
+ *
+ * V2 does not keep the AWDL VIF in a controller member, so cache the
+ * successfully attached AWDL protocol object here instead.
+ */
+static AirportItlwm *gAirplayAWDLController = nullptr;
+static AirportItlwmAWDLInterface *gAirplayAWDLInterface = nullptr;
+
+/*
+ * Sonoma event 41 payload.
+ *
+ * Native Broadcom sends exactly 0x24 bytes:
+ *
+ *   +0x00  AW number
+ *   +0x04  state
+ *   +0x08  master[6]
+ *   +0x0e  topMaster[6]
+ *   +0x14  firmware AW-start time
+ *   +0x18  apple80211_channel
+ */
+struct AirplayAWStartPayload
+{
+    UInt32 awNumber;
+    UInt32 state;
+    UInt8 master[6];
+    UInt8 topMaster[6];
+    UInt32 fwAwStartTime;
+    struct apple80211_channel channel;
+};
+
+static_assert(
+    sizeof(AirplayAWStartPayload) == 0x24,
+    "AW start payload must be 36 bytes"
+);
+
+static UInt32 gAirplayAWNumber = 0;
+
+extern "C" IOReturn
+AirportItlwmReportAWDLStart(
+    IOEthernetController *controller,
+    UInt32 firmwareTime,
+    UInt32 channel
+)
+{
+    AirportItlwm *airport =
+        OSDynamicCast(AirportItlwm, controller);
+
+    if (airport == nullptr ||
+        airport != gAirplayAWDLController ||
+        gAirplayAWDLInterface == nullptr) {
+        return kIOReturnNotReady;
+    }
+
+    AirplayAWStartPayload payload = {};
+
+    gAirplayAWNumber =
+        (gAirplayAWNumber + 1) & 0xffff;
+
+    if (gAirplayAWNumber == 0)
+        gAirplayAWNumber = 1;
+
+    payload.awNumber = gAirplayAWNumber;
+
+    /*
+     * Broadcom derives this from firmware state.
+     * Keep it zero for the first event-path validation.
+     */
+    payload.state = 0;
+
+    /*
+     * IO80211 byte-swaps the native +0x14 field.
+     * Intel GP2 is already host-endian here.
+     */
+    payload.fwAwStartTime =
+        __builtin_bswap32(firmwareTime);
+
+    /*
+     * Broadcom leaves version/flags zero and fills
+     * the control-channel number.
+     */
+    payload.channel.version = 0;
+    payload.channel.channel = channel;
+    payload.channel.flags = 0;
+
+    IOLog(
+        "AIRPLAY AWDL BRIDGE41: "
+        "aw=%u fw=%u channel=%u len=%lu\n",
+        payload.awNumber,
+        firmwareTime,
+        channel,
+        (unsigned long)sizeof(payload)
+    );
+
+    /*
+     * Sonoma IO80211:
+     *   41 = AWDL_AVAILABILITY_WINDOW_START
+     *
+     * Deliberately do not use the stale local macro.
+     */
+    return gAirplayAWDLInterface->reportDataPathEvents(
+        41,
+        &payload,
+        sizeof(payload),
+        false
+    );
+}
 OSDefineMetaClassAndStructors(CTimeout, OSObject)
 
 IO80211WorkQueue *_fWorkloop;
@@ -178,6 +287,230 @@ initCCLogs()
     return driverLogPipe && driverDataPathPipe && driverSnapshotsPipe && driverFaultReporter;
 }
 
+
+
+bool
+AirportItlwm::attachInterface(OSObject *object, IOService *provider)
+{
+    bool isAWDL =
+        OSDynamicCast(AirportItlwmAWDLInterface, object) != nullptr;
+
+    IOLog(
+        "AIRPLAY V2 ATTACHIF: ENTER object=%p provider=%p awdl=%d\n",
+        object,
+        provider,
+        isAWDL ? 1 : 0
+    );
+
+    if (isAWDL) {
+        UInt8 value = 1;
+        setProperty(
+            "AIRPLAYAttachInterfaceAWDLEnter",
+            OSData::withBytes(&value, sizeof(value))
+        );
+    }
+
+    bool result =
+        super::attachInterface(object, provider);
+
+    /*
+     * Cache only an AWDL protocol object that Apple actually accepted
+     * through attachInterface().
+     */
+    if (isAWDL && result) {
+        AirportItlwmAWDLInterface *awdl =
+            OSDynamicCast(AirportItlwmAWDLInterface, object);
+
+        if (awdl != nullptr) {
+            gAirplayAWDLController = this;
+            gAirplayAWDLInterface = awdl;
+
+            setProperty(
+                "AIRPLAYAWDLBridgeVIFCached",
+                (unsigned long long)1,
+                8
+            );
+
+            IOLog(
+                "AIRPLAY AWDL BRIDGE: cached attached vif=%p controller=%p\n",
+                awdl,
+                this
+            );
+        }
+    }
+
+    IOLog(
+        "AIRPLAY V2 ATTACHIF: RETURN=%d object=%p awdl=%d\n",
+        result,
+        object,
+        isAWDL ? 1 : 0
+    );
+
+    if (isAWDL) {
+        UInt8 value = result ? 1 : 0;
+        setProperty(
+            "AIRPLAYAttachInterfaceAWDLReturn",
+            OSData::withBytes(&value, sizeof(value))
+        );
+    }
+
+    return result;
+}
+
+
+IO80211VirtualInterface *AirportItlwm::
+createVirtualInterface(ether_addr *ether, UInt role)
+{
+    UInt8 reached = 1;
+    setProperty(
+        "AIRPLAYSonomaFactoryReached",
+        OSData::withBytes(&reached, sizeof(reached))
+    );
+
+    UInt8 roleValue = (UInt8)role;
+    setProperty(
+        "AIRPLAYSonomaFactoryRole",
+        OSData::withBytes(&roleValue, sizeof(roleValue))
+    );
+
+    IOLog(
+        "AIRPLAY V2 FACTORY: role=%u ether=%p\n",
+        (unsigned int)role,
+        ether
+    );
+
+    IO80211VirtualInterface *vif = nullptr;
+
+    if (role == APPLE80211_VIF_AWDL) {
+        AirportItlwmAWDLInterface *awdl =
+            new AirportItlwmAWDLInterface;
+
+        if (awdl != nullptr) {
+            bool initialized = awdl->init(
+                this,
+                ether,
+                role,
+                "awdl"
+            );
+
+            IOLog(
+                "AIRPLAY V2 FACTORY: AWDL init=%d object=%p\n",
+                initialized,
+                awdl
+            );
+
+            if (initialized) {
+                vif = awdl;
+            } else {
+                awdl->release();
+            }
+        }
+    } else {
+        vif = super::createVirtualInterface(ether, role);
+    }
+
+    UInt8 returned = vif ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaFactoryReturnedNonNull",
+        OSData::withBytes(&returned, sizeof(returned))
+    );
+
+    IOLog(
+        "AIRPLAY V2 FACTORY: returning=%p role=%u\n",
+        vif,
+        (unsigned int)role
+    );
+
+    return vif;
+}
+
+
+IOReturn AirportItlwm::
+probeAWDLInterfaceCreation(apple80211_virt_if_create_data *data)
+{
+    if (data == nullptr)
+        return kIOReturnBadArgument;
+
+    if (data->role != APPLE80211_VIF_AWDL)
+        return kIOReturnUnsupported;
+
+    /*
+     * Sonoma createProxInterface uses a locally administered
+     * unicast address derived from the requested MAC.
+     */
+    struct ether_addr awdlAddress;
+
+    memcpy(
+        awdlAddress.octet,
+        data->mac,
+        sizeof(awdlAddress.octet)
+    );
+
+    awdlAddress.octet[0] =
+        (awdlAddress.octet[0] & 0xFC) | 0x02;
+
+    IOLog(
+        "AIRPLAY V2 ATTACH: request role=%u\n",
+        (unsigned int)data->role
+    );
+
+    IO80211VirtualInterface *vif = nullptr;
+
+    bool attached = attachVirtualInterface(
+        &vif,
+        &awdlAddress,
+        APPLE80211_VIF_AWDL,
+        false
+    );
+
+    bool started = false;
+
+    if (attached && vif != nullptr) {
+        started = vif->start(this);
+    }
+
+    UInt8 attachedValue = attached ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaAWDLAttached",
+        OSData::withBytes(&attachedValue, sizeof(attachedValue))
+    );
+
+    UInt8 vifValue = vif ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaAWDLVifNonNull",
+        OSData::withBytes(&vifValue, sizeof(vifValue))
+    );
+
+    IOLog(
+        "AIRPLAY V2 ATTACH: attach=%d vif=%p\n",
+        attached,
+        vif
+    );
+
+    if (!attached || !started || vif == nullptr)
+        return kIOReturnError;
+
+    const char *bsdName = vif->getBSDName();
+
+    IOLog(
+        "AIRPLAY V2 ATTACH: SUCCESS vif=%p bsd=%s role=%u\n",
+        vif,
+        bsdName ? bsdName : "(null)",
+        (unsigned int)data->role
+    );
+
+    if (bsdName != nullptr && bsdName[0] != '\0') {
+        strlcpy(
+            (char *)data->bsd_name,
+            bsdName,
+            sizeof(data->bsd_name)
+        );
+    }
+
+    return kIOReturnSuccess;
+}
+
+
 bool AirportItlwm::start(IOService *provider)
 {
     XYLog("%s\n", __PRETTY_FUNCTION__);
@@ -318,6 +651,139 @@ bool AirportItlwm::start(IOService *provider)
     if (TAILQ_EMPTY(&fHalService->get80211Controller()->ic_ess))
         fHalService->get80211Controller()->ic_flags |= IEEE80211_F_AUTO_JOIN;
     registerService();
+
+    /*
+     * Sonoma publishes the AWDL/AirLink virtual interface while idle.
+     * Create it after the primary interface has been registered.
+     *
+     * Use the controller MAC as the base and apply the Sonoma
+     * locally-administered unicast transformation:
+     *
+     *     first = (first & 0xFC) | 0x02
+     *
+     * Do not use the old last-byte XOR experiment.
+     */
+    struct ether_addr awdlAddress;
+
+    memcpy(
+        awdlAddress.octet,
+        fHalService->get80211Controller()->ic_myaddr,
+        sizeof(awdlAddress.octet)
+    );
+
+    awdlAddress.octet[0] =
+        (awdlAddress.octet[0] & 0xFC) | 0x02;
+
+    IO80211VirtualInterface *awdlVif = nullptr;
+
+    IOLog(
+        "AIRPLAY V2 BOOT ATTACH: requesting AWDL role=%u\n",
+        (unsigned int)APPLE80211_VIF_AWDL
+    );
+
+    bool awdlAttached = attachVirtualInterface(
+        &awdlVif,
+        &awdlAddress,
+        APPLE80211_VIF_AWDL,
+        false
+    );
+
+    bool awdlStarted = false;
+
+    if (awdlAttached && awdlVif != nullptr) {
+        bool awdlSkywalkAttached =
+            attachInterface(awdlVif, this);
+
+        UInt8 awdlSkywalkAttachedValue =
+            awdlSkywalkAttached ? 1 : 0;
+
+        setProperty(
+            "AIRPLAYBootSkywalkAttachResult",
+            OSData::withBytes(
+                &awdlSkywalkAttachedValue,
+                sizeof(awdlSkywalkAttachedValue)
+            )
+        );
+
+        if (awdlSkywalkAttached) {
+            awdlStarted = awdlVif->start(this);
+        }
+    }
+
+    if (awdlAttached && awdlVif != nullptr) {
+        ifnet_t awdlBSDIf = awdlVif->getBSDInterface();
+        const char *awdlBSDName = awdlVif->getBSDName();
+        const char *awdlBSDPrefix = awdlVif->getBSDNamePrefix();
+        UInt awdlBSDUnit = awdlVif->getBSDUnitNumber();
+
+        UInt8 bsdIfNonNull = awdlBSDIf != nullptr ? 1 : 0;
+        UInt8 bsdNameNonNull =
+            (awdlBSDName != nullptr && awdlBSDName[0] != '\0') ? 1 : 0;
+        UInt8 bsdPrefixNonNull =
+            (awdlBSDPrefix != nullptr && awdlBSDPrefix[0] != '\0') ? 1 : 0;
+
+        setProperty(
+            "AIRPLAYBootBSDIfNonNull",
+            OSData::withBytes(&bsdIfNonNull, sizeof(bsdIfNonNull))
+        );
+
+        setProperty(
+            "AIRPLAYBootBSDNameNonNull",
+            OSData::withBytes(&bsdNameNonNull, sizeof(bsdNameNonNull))
+        );
+
+        setProperty(
+            "AIRPLAYBootBSDPrefixNonNull",
+            OSData::withBytes(&bsdPrefixNonNull, sizeof(bsdPrefixNonNull))
+        );
+
+        setProperty(
+            "AIRPLAYBootBSDUnit",
+            OSData::withBytes(&awdlBSDUnit, sizeof(awdlBSDUnit))
+        );
+
+        IOLog(
+            "AIRPLAY V2 BOOT BSD STATE: ifp=%p name=%s prefix=%s unit=%u\n",
+            awdlBSDIf,
+            awdlBSDName ? awdlBSDName : "(null)",
+            awdlBSDPrefix ? awdlBSDPrefix : "(null)",
+            (unsigned int)awdlBSDUnit
+        );
+    }
+
+    UInt8 awdlStartedValue = awdlStarted ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaBootAWDLStarted",
+        OSData::withBytes(
+            &awdlStartedValue,
+            sizeof(awdlStartedValue)
+        )
+    );
+
+    UInt8 awdlAttachedValue = awdlAttached ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaBootAWDLAttached",
+        OSData::withBytes(
+            &awdlAttachedValue,
+            sizeof(awdlAttachedValue)
+        )
+    );
+
+    UInt8 awdlVifValue = awdlVif ? 1 : 0;
+    setProperty(
+        "AIRPLAYSonomaBootAWDLVifNonNull",
+        OSData::withBytes(
+            &awdlVifValue,
+            sizeof(awdlVifValue)
+        )
+    );
+
+    IOLog(
+        "AIRPLAY V2 BOOT ATTACH: attach=%d vif=%p\n",
+        awdlAttached,
+        awdlVif
+    );
+
     return true;
 }
 
@@ -847,13 +1313,84 @@ setPOWER(OSObject *object,
 
 SInt32 AirportItlwm::apple80211_ioctl(IO80211SkywalkInterface *interface,unsigned long cmd,void *data, bool b1, bool b2)
 {
+    if (cmd == 349) {
+        UInt8 value = 1;
+        OSData *marker = OSData::withBytes(&value, sizeof(value));
+        if (marker != nullptr) {
+            setProperty("AIRPLAY349AppleIOCTL", marker);
+            marker->release();
+        }
+    }
+
     if (!ml_at_interrupt_context())
         XYLog("%s cmd: %s b1: %d b2: %d\n", __FUNCTION__, convertApple80211IOCTLToString((unsigned int)cmd), b1, b2);
+    if (!ml_at_interrupt_context())
+        XYLog("AIRPLAY TRACE: cmd=%lu (%s) b1=%d b2=%d\n",
+              cmd, convertApple80211IOCTLToString((unsigned int)cmd), b1, b2);
+
     return super::apple80211_ioctl(interface, cmd, data, b1, b2);
+}
+
+SInt32 AirportItlwm::apple80211VirtualRequest(
+    UInt request_type,
+    int request_number,
+    IO80211VirtualInterface *interface,
+    void *data
+)
+{
+    if (request_number == APPLE80211_IOC_SUPPORTED_CHANNELS) {
+        IOLog(
+            "AIRPLAY VIRTUALREQ27: type=%u request=%d interface=%p data=%p\\n",
+            request_type,
+            request_number,
+            interface,
+            data
+        );
+
+        if (interface != nullptr) {
+            interface->setProperty(
+                "AIRPLAYVirtualReq27Enter",
+                (unsigned long long)1,
+                8
+            );
+        }
+    }
+
+    if (request_number == 349) {
+        UInt8 value = 1;
+        OSData *marker = OSData::withBytes(&value, sizeof(value));
+        if (marker != nullptr) {
+            setProperty("AIRPLAY349VirtualRequest", marker);
+            marker->release();
+        }
+    }
+
+    if (!ml_at_interrupt_context() &&
+        (request_number == 119 || request_number == 120)) {
+        XYLog("AIRPLAY VIRTUALREQ: type=%u request=%d\n",
+              request_type,
+              request_number);
+    }
+
+    return super::apple80211VirtualRequest(
+        request_type,
+        request_number,
+        interface,
+        data
+    );
 }
 
 SInt32 AirportItlwm::apple80211SkywalkRequest(UInt request,int cmd,IO80211SkywalkInterface *interface,void *data)
 {
+    if (request == 349 || cmd == 349) {
+        UInt8 value = 1;
+        OSData *marker = OSData::withBytes(&value, sizeof(value));
+        if (marker != nullptr) {
+            setProperty("AIRPLAY349Skywalk1", marker);
+            marker->release();
+        }
+    }
+
     if (!ml_at_interrupt_context())
         XYLog("%s 1 cmd: %s request: %d\n", __FUNCTION__, convertApple80211IOCTLToString(cmd), request);
     return kIOReturnUnsupported;
@@ -861,6 +1398,15 @@ SInt32 AirportItlwm::apple80211SkywalkRequest(UInt request,int cmd,IO80211Skywal
 
 SInt32 AirportItlwm::apple80211SkywalkRequest(UInt request,int cmd,IO80211SkywalkInterface *interface,void *data,void *)
 {
+    if (request == 349 || cmd == 349) {
+        UInt8 value = 1;
+        OSData *marker = OSData::withBytes(&value, sizeof(value));
+        if (marker != nullptr) {
+            setProperty("AIRPLAY349Skywalk2", marker);
+            marker->release();
+        }
+    }
+
     if (!ml_at_interrupt_context())
         XYLog("%s 2 cmd: %s request: %d\n", __FUNCTION__, convertApple80211IOCTLToString(cmd), request);
     return kIOReturnUnsupported;

@@ -407,6 +407,39 @@ bool AirportItlwm::start(IOService *provider)
         releaseAll();
         return false;
     }
+
+    /*
+     * Experimental AWDL boot-time attachment.
+     *
+     * Native Broadcom exposes awdl0 as a sibling of the primary
+     * infrastructure interface before an AirPlay session begins.
+     */
+    IOEthernetAddress hwAddress;
+    if (getHardwareAddress(&hwAddress) == kIOReturnSuccess) {
+        struct ether_addr awdlAddress;
+        memcpy(awdlAddress.octet, hwAddress.bytes, 6);
+
+        // Give the AWDL interface a distinct locally-administered
+        // unicast MAC address.
+        awdlAddress.octet[0] =
+            (awdlAddress.octet[0] | 0x02) & 0xFE;
+        awdlAddress.octet[5] ^= 0x01;
+
+        IO80211VirtualInterface *awdlVif = nullptr;
+
+        bool awdlAttached = attachVirtualInterface(
+            &awdlVif,
+            &awdlAddress,
+            APPLE80211_VIF_AWDL,
+            true
+        );
+
+        IOLog("AIRPLAY BOOT AWDL: attach=%d vif=%p\n",
+              awdlAttached, awdlVif);
+    } else {
+        IOLog("AIRPLAY BOOT AWDL: could not obtain hardware address\n");
+    }
+
     fWatchdogWorkLoop = IOWorkLoop::workLoop();
     if (fWatchdogWorkLoop == NULL) {
         XYLog("init watchdog workloop fail\n");
@@ -1005,6 +1038,8 @@ disableVirtualInterface(IO80211VirtualInterface *interface)
 IO80211VirtualInterface *AirportItlwm::
 createVirtualInterface(ether_addr *ether, UInt role)
 {
+    XYLog("AIRPLAY VIF: createVirtualInterface role=%u\n", role);
+
     if (role - 1 > 3)
         return super::createVirtualInterface(ether, role);
     IO80211VirtualInterface *inf = new IO80211VirtualInterface;

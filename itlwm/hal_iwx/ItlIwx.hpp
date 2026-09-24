@@ -407,6 +407,7 @@ public:
     void    iwx_mac_ctxt_cmd_fill_sta(struct iwx_softc *, struct iwx_node *,
             struct iwx_mac_data_sta *, int);
     int    iwx_mac_ctxt_cmd(struct iwx_softc *, struct iwx_node *, uint32_t, int);
+    int    iwx_awdl_probe_p2p_mac(const uint8_t *addr);
     int    iwx_clear_statistics(struct iwx_softc *);
     int    iwx_update_quotas(struct iwx_softc *, struct iwx_node *, int);
     void    iwx_add_task(struct iwx_softc *, struct taskq *, struct task *);

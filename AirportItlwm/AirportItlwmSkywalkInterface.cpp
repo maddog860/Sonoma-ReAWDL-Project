@@ -92,6 +92,44 @@ static int ieeeChanFlag2apple(int flags, int bw)
     return ret;
 }
 
+void *AirportItlwmSkywalkInterface::createPeerManager(void)
+{
+    XYLog("AIRPLAY SKY: createPeerManager ENTER\n");
+
+    void *result = super::createPeerManager();
+
+    XYLog("AIRPLAY SKY: createPeerManager EXIT result=%p\n", result);
+
+    return result;
+}
+
+IOReturn AirportItlwmSkywalkInterface::reportDataPathEvents(UInt a, void *b, unsigned long c, bool d)
+{
+    IOLog("AIRPLAY SKY TRACE: reportDataPathEvents a=%u b=%p c=%lu d=%d\n",
+          a, b, c, d);
+
+    IOReturn result = super::reportDataPathEvents(a, b, c, d);
+
+    IOLog("AIRPLAY SKY TRACE: reportDataPathEvents RETURN=%d\n", result);
+    return result;
+}
+
+void AirportItlwmSkywalkInterface::setDataPathState(bool state)
+{
+    IOLog("AIRPLAY SKY TRACE: setDataPathState state=%d\n", state);
+    super::setDataPathState(state);
+}
+
+void *AirportItlwmSkywalkInterface::getP2PSkywalkPeerMgr(void)
+{
+    IOLog("AIRPLAY SKY TRACE: getP2PSkywalkPeerMgr ENTER\n");
+
+    void *result = super::getP2PSkywalkPeerMgr();
+
+    IOLog("AIRPLAY SKY TRACE: getP2PSkywalkPeerMgr RETURN=%p\n", result);
+    return result;
+}
+
 void AirportItlwmSkywalkInterface::associateSSID(uint8_t *ssid, uint32_t ssid_len, const struct ether_addr &bssid, uint32_t authtype_lower, uint32_t authtype_upper, uint8_t *key, uint32_t key_len, int key_index)
 {
     struct ieee80211com *ic = fHalService->get80211Controller();
@@ -262,6 +300,28 @@ void AirportItlwmSkywalkInterface::setGTK(const u_int8_t *gtk, size_t key_len, u
                 ic->ic_rsngroupcipher = ni->ni_rsngroupcipher;
         }
     }
+}
+
+
+IOReturn AirportItlwmSkywalkInterface::
+setVIRTUAL_IF_CREATE(apple80211_virt_if_create_data *data)
+{
+    if (data == nullptr)
+        return kIOReturnBadArgument;
+
+    IOLog(
+        "AIRPLAY VIF CREATE: role=%u data=%p\n",
+        (unsigned int)data->role,
+        data
+    );
+
+    if (instance == nullptr)
+        return kIOReturnNotReady;
+
+    if (data->role != APPLE80211_VIF_AWDL)
+        return kIOReturnUnsupported;
+
+    return instance->probeAWDLInterfaceCreation(data);
 }
 
 bool AirportItlwmSkywalkInterface::

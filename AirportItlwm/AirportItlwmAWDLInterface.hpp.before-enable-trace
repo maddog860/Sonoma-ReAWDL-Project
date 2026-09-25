@@ -1,0 +1,107 @@
+#ifndef AirportItlwmAWDLInterface_hpp
+#define AirportItlwmAWDLInterface_hpp
+
+#include "Airport/Apple80211.h"
+
+/*
+ * Concrete Sonoma AWDL protocol object.
+ *
+ * Initial implementation deliberately provides no runtime behavior.
+ * Every AWDL protocol operation returns kIOReturnUnsupported.
+ *
+ * This class is not instantiated yet.
+ */
+class AirportItlwmAWDLInterface : public IO80211AWDLProtocol {
+    OSDeclareDefaultStructors(AirportItlwmAWDLInterface)
+
+public:
+    virtual bool attach(IOService *) APPLE_KEXT_OVERRIDE;
+    virtual bool start(IOService *) APPLE_KEXT_OVERRIDE;
+
+    virtual bool prepareBSDInterface(
+        ifnet_t,
+        UInt
+    ) APPLE_KEXT_OVERRIDE;
+
+    virtual void *createPeerManager(
+        void
+    ) APPLE_KEXT_OVERRIDE;
+
+    virtual bool attachToBpf(
+        void
+    ) APPLE_KEXT_OVERRIDE;
+
+    virtual bool configureIfnet(
+        void
+    ) APPLE_KEXT_OVERRIDE;
+
+    virtual IOReturn getSSID(apple80211_ssid_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getCHANNEL(apple80211_channel_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getBSSID(apple80211_bssid_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getSTATE(apple80211_state_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_SYNC_ENABLED(apple80211_awdl_sync_enabled *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(apple80211_awdl_extension_state_machine_parameter *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_ELECTION_ID(apple80211_awdl_election_id *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_ELECTION_METRIC(apple80211_awdl_election_metric *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(apple80211_awdl_sync_channel_sequence *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getPEER_CACHE_MAXIMUM_SIZE(apple80211_peer_cache_maximum_size *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_SYNC_STATE(apple80211_awdl_sync_state *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_PRESENCE_MODE(apple80211_awdl_presence_mode *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_ELECTION_PARAMS(apple80211_awdl_election_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_DEVICE_CAPABILITIES(apple80211_awdl_device_capabilities *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_SECONDARY_MASTER_CHANNEL(apple80211_awdl_secondary_master_channel *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_AF_TX_MODE(apple80211_awdl_af_tx_mode *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_MIN_RATE(apple80211_awdl_min_rate *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_ENCRYPTION_TYPE(apple80211_encrypt *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_DEV_STATS(apple80211_awdl_dev_stats *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_CCA(apple80211_awdl_cca *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getAWDL_AF_SECONDARY_PAYLOAD_CAPABILITIES(apple80211_awdl_cap *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn getLLW_PARAMS(apple80211_llw_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setSSID(apple80211_ssid_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setCHANNEL(apple80211_channel_data *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SYNC_ENABLED(apple80211_awdl_sync_enabled *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(apple80211_awdl_extension_state_machine_parameter *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ELECTION_ID(apple80211_awdl_election_id *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_BSSID(apple80211_awdl_bssid *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ELECTION_METRIC(apple80211_awdl_election_metric *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(apple80211_awdl_sync_channel_sequence *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SYNC_STATE(apple80211_awdl_sync_state *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_PRESENCE_MODE(apple80211_awdl_presence_mode *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setPEER_CACHE_CONTROL(apple80211_peer_cache_control *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_OOB_REQUEST(apple80211_awdl_oob_request *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SYNC_FRAME_TEMPLATE(apple80211_awdl_sync_frame_template *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ELECTION_PARAMS(apple80211_awdl_election_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_PEER_TRAFFIC_REGISTRATION(apple80211_awdl_peer_traffic_registration *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_SECONDARY_MASTER_CHANNEL(apple80211_awdl_secondary_master_channel *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_AF_TX_MODE(apple80211_awdl_af_tx_mode *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_MIN_RATE(apple80211_awdl_min_rate *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ENCRYPTION_KEYS(apple80211_key *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_ENCRYPTION_TYPE(apple80211_encrypt *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_OOB_AUTO_REQUEST(apple80211_awdl_oob_request *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_AWDL_ADVERTISERS(awdl_peer_advert_add *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_DFSP_UCSA_CONFIG(apple80211_awdl_dfsp_ucsa_config *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setCOMPANION_SKYWALK_IF_CREATE(apple80211_companion_skywalk_if_create *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_OOB_SEC_PAYLOAD_REQUEST(apple80211_awdl_af_sec_payload_request *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setLLW_PARAMS(apple80211_llw_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setTX_RATE(apple80211_tx_rate *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setP2P_COEX_PROTECTION(apple80211_p2p_coex_protection *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setPSF_DWELL(apple80211_awdl_psf_dwell_params *) APPLE_KEXT_OVERRIDE;
+    virtual IOReturn setAWDL_RTG_PEER_STATS_CONFIG(apple80211_rtg_peer_stats_cfg *) APPLE_KEXT_OVERRIDE;
+};
+
+static_assert(
+    sizeof(AirportItlwmAWDLInterface) == 0x120,
+    "AirportItlwmAWDLInterface ABI size mismatch"
+);
+
+#endif

@@ -1,0 +1,514 @@
+#include "AirportItlwmAWDLInterface.hpp"
+
+
+OSDefineMetaClassAndStructors(
+    AirportItlwmAWDLInterface,
+    IO80211AWDLProtocol
+)
+
+bool
+AirportItlwmAWDLInterface::attach(IOService *provider)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: attach ENTER this=%p provider=%p\n",
+        this,
+        provider
+    );
+
+    bool result =
+        IO80211VirtualInterface::attach(provider);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: attach RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::start(IOService *provider)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: start ENTER this=%p provider=%p\n",
+        this,
+        provider
+    );
+
+    bool result =
+        IO80211VirtualInterface::start(provider);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: start RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::prepareBSDInterface(
+    ifnet_t ifp,
+    UInt unit)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: prepareBSDInterface ENTER this=%p ifp=%p unit=%u\n",
+        this,
+        ifp,
+        (unsigned int)unit
+    );
+
+    bool result =
+        IO80211VirtualInterface::prepareBSDInterface(
+            ifp,
+            unit
+        );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: prepareBSDInterface RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+
+void *
+AirportItlwmAWDLInterface::createPeerManager(void)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: createPeerManager ENTER this=%p\n",
+        this
+    );
+
+    void *result =
+        IO80211VirtualInterface::createPeerManager();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: createPeerManager RETURN=%p this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::attachToBpf(void)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: attachToBpf ENTER this=%p\n",
+        this
+    );
+
+    bool result =
+        IO80211VirtualInterface::attachToBpf();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: attachToBpf RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::configureIfnet(void)
+{
+    IOLog(
+        "AIRPLAY AWDL LIFE: configureIfnet ENTER this=%p\n",
+        this
+    );
+
+    bool result =
+        IO80211VirtualInterface::configureIfnet();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: configureIfnet RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    return result;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getSSID(apple80211_ssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getCHANNEL(apple80211_channel_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getBSSID(apple80211_bssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getSTATE(apple80211_state_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_ENABLED(apple80211_awdl_sync_enabled *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(apple80211_awdl_extension_state_machine_parameter *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_ID(apple80211_awdl_election_id *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_METRIC(apple80211_awdl_election_metric *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(apple80211_awdl_sync_channel_sequence *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getPEER_CACHE_MAXIMUM_SIZE(apple80211_peer_cache_maximum_size *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_STATE(apple80211_awdl_sync_state *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_PRESENCE_MODE(apple80211_awdl_presence_mode *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_PARAMS(apple80211_awdl_election_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DEVICE_CAPABILITIES(apple80211_awdl_device_capabilities *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SECONDARY_MASTER_CHANNEL(apple80211_awdl_secondary_master_channel *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_AF_TX_MODE(apple80211_awdl_af_tx_mode *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_MIN_RATE(apple80211_awdl_min_rate *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ENCRYPTION_TYPE(apple80211_encrypt *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DEV_STATS(apple80211_awdl_dev_stats *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_CCA(apple80211_awdl_cca *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_AF_SECONDARY_PAYLOAD_CAPABILITIES(apple80211_awdl_cap *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getLLW_PARAMS(apple80211_llw_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setSSID(apple80211_ssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setCHANNEL(apple80211_channel_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_ENABLED(apple80211_awdl_sync_enabled *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(apple80211_awdl_extension_state_machine_parameter *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_ID(apple80211_awdl_election_id *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_BSSID(apple80211_awdl_bssid *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_METRIC(apple80211_awdl_election_metric *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(apple80211_awdl_sync_channel_sequence *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_STATE(apple80211_awdl_sync_state *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_PRESENCE_MODE(apple80211_awdl_presence_mode *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setPEER_CACHE_CONTROL(apple80211_peer_cache_control *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_REQUEST(apple80211_awdl_oob_request *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_FRAME_TEMPLATE(apple80211_awdl_sync_frame_template *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_PARAMS(apple80211_awdl_election_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_PEER_TRAFFIC_REGISTRATION(apple80211_awdl_peer_traffic_registration *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SECONDARY_MASTER_CHANNEL(apple80211_awdl_secondary_master_channel *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_AF_TX_MODE(apple80211_awdl_af_tx_mode *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_MIN_RATE(apple80211_awdl_min_rate *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ENCRYPTION_KEYS(apple80211_key *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ENCRYPTION_TYPE(apple80211_encrypt *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_AUTO_REQUEST(apple80211_awdl_oob_request *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_AWDL_ADVERTISERS(awdl_peer_advert_add *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_DFSP_UCSA_CONFIG(apple80211_awdl_dfsp_ucsa_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setCOMPANION_SKYWALK_IF_CREATE(apple80211_companion_skywalk_if_create *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_SEC_PAYLOAD_REQUEST(apple80211_awdl_af_sec_payload_request *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setLLW_PARAMS(apple80211_llw_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setTX_RATE(apple80211_tx_rate *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setP2P_COEX_PROTECTION(apple80211_p2p_coex_protection *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setPSF_DWELL(apple80211_awdl_psf_dwell_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_RTG_PEER_STATS_CONFIG(apple80211_rtg_peer_stats_cfg *)
+{
+    return kIOReturnUnsupported;
+}
+

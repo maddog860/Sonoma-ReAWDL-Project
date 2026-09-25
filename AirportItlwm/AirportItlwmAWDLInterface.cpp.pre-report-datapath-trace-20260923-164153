@@ -1,0 +1,1685 @@
+#include "AirportItlwmAWDLInterface.hpp"
+#include "AirportItlwmV2.hpp"
+
+/*
+ * Airport/Apple80211.h already supplies AirportItlwm's private
+ * IOSkywalkPacketBufferPool declaration.  Prevent MacKernelSDK's
+ * duplicate pool header from redefining that class when the concrete
+ * queue headers include it internally.
+ */
+#ifndef _IOSKYWALKPACKETBUFFERPOOL_H
+#define _IOSKYWALKPACKETBUFFERPOOL_H
+#endif
+
+#include <skywalk/packet/os_packet.h>
+
+#include <IOKit/skywalk/IOSkywalkPacketQueue.h>
+#include <IOKit/skywalk/IOSkywalkTxSubmissionQueue.h>
+#include <IOKit/skywalk/IOSkywalkTxCompletionQueue.h>
+#include <IOKit/skywalk/IOSkywalkRxSubmissionQueue.h>
+#include <IOKit/skywalk/IOSkywalkRxCompletionQueue.h>
+
+
+OSDefineMetaClassAndStructors(
+    AirportItlwmAWDLInterface,
+    IO80211AWDLProtocol
+)
+
+
+static void
+airplayLifeProperty(IOService *service, const char *key, UInt8 value)
+{
+    OSData *data = OSData::withBytes(&value, sizeof(value));
+
+    if (data != nullptr) {
+        service->setProperty(key, data);
+        data->release();
+    }
+}
+
+
+static UInt32
+airplayAWDLTxSubmission(
+    OSObject *,
+    IOSkywalkTxSubmissionQueue *,
+    IOSkywalkPacket * const *,
+    UInt32,
+    void *)
+{
+    static UInt32 probeHits = 0;
+    if (probeHits < 20) {
+        IOLog("AIRPLAY AWDL QUEUE: airplayAWDLTxSubmission hit=%u\n", probeHits + 1);
+    }
+    probeHits++;
+    /*
+     * Registration-only experiment.
+     *
+     * Returning zero deliberately consumes no packets.  The proven
+     * Intel mbuf bridge will be reintroduced only after the native
+     * AWDL registration/BSD publication path is established.
+     */
+    return 0;
+}
+
+
+static UInt32
+airplayAWDLTxCompletion(
+    OSObject *,
+    IOSkywalkTxCompletionQueue *,
+    IOSkywalkPacket **,
+    UInt32,
+    void *)
+{
+    static UInt32 probeHits = 0;
+    if (probeHits < 20) {
+        IOLog("AIRPLAY AWDL QUEUE: airplayAWDLTxCompletion hit=%u\n", probeHits + 1);
+    }
+    probeHits++;
+    return 0;
+}
+
+
+static UInt32
+airplayAWDLRxSubmission(
+    OSObject *,
+    IOSkywalkRxSubmissionQueue *,
+    IOSkywalkPacket * const *,
+    UInt32,
+    void *)
+{
+    static UInt32 probeHits = 0;
+    if (probeHits < 20) {
+        IOLog("AIRPLAY AWDL QUEUE: airplayAWDLRxSubmission hit=%u\n", probeHits + 1);
+    }
+    probeHits++;
+    return 0;
+}
+
+
+static UInt32
+airplayAWDLRxCompletion(
+    OSObject *,
+    IOSkywalkRxCompletionQueue *,
+    IOSkywalkPacket **,
+    UInt32,
+    void *)
+{
+    static UInt32 probeHits = 0;
+    if (probeHits < 20) {
+        IOLog("AIRPLAY AWDL QUEUE: airplayAWDLRxCompletion hit=%u\n", probeHits + 1);
+    }
+    probeHits++;
+    return 0;
+}
+
+
+static bool
+airplayRegisterNativeAWDL(AirportItlwmAWDLInterface *awdl)
+{
+    if (awdl == nullptr)
+        return false;
+
+    IOLog(
+        "AIRPLAY AWDL NATIVE: registration ENTER this=%p\n",
+        awdl
+    );
+
+    /*
+     * Temporary first-test pool sizing.
+     *
+     * These values are deliberately NOT claimed to be native
+     * Broadcom constants.  They are retained from the old
+     * known-compiling experiment simply to isolate the registration
+     * question from a second pool-sizing experiment.
+     *
+     * A 2048-byte single-buffer packet comfortably contains the
+     * native AWDL registration MTU value (1428).
+     */
+    IOSkywalkPacketBufferPool::PoolOptions poolOptions = {};
+    poolOptions.packetCount = 64;
+    poolOptions.bufferCount = 64;
+    poolOptions.bufferSize = 2048;
+    poolOptions.maxBuffersPerPacket = 1;
+    poolOptions.memorySegmentSize = 0;
+    poolOptions.poolFlags = 1;
+    poolOptions.pad = 0;
+
+    IOSkywalkPacketBufferPool *pool =
+        IOSkywalkPacketBufferPool::withName(
+            "AirportItlwmAWDL",
+            awdl,
+            1,
+            &poolOptions
+        );
+
+    if (pool == nullptr) {
+        IOLog("AIRPLAY AWDL NATIVE: pool creation FAILED\n");
+        return false;
+    }
+
+    IOSkywalkTxSubmissionQueue *txSubmission =
+        IOSkywalkTxSubmissionQueue::withPool(
+            pool,
+            64,
+            0,
+            awdl,
+            &airplayAWDLTxSubmission,
+            nullptr,
+            0
+        );
+
+    IOSkywalkTxCompletionQueue *txCompletion =
+        IOSkywalkTxCompletionQueue::withPool(
+            pool,
+            64,
+            0,
+            awdl,
+            &airplayAWDLTxCompletion,
+            nullptr,
+            0
+        );
+
+    IOSkywalkRxSubmissionQueue *rxSubmission =
+        IOSkywalkRxSubmissionQueue::withPool(
+            pool,
+            64,
+            0,
+            0,
+            awdl,
+            &airplayAWDLRxSubmission,
+            nullptr,
+            0
+        );
+
+    IOSkywalkRxCompletionQueue *rxCompletion =
+        IOSkywalkRxCompletionQueue::withPool(
+            pool,
+            64,
+            0,
+            awdl,
+            &airplayAWDLRxCompletion,
+            nullptr,
+            0
+        );
+
+    if (txSubmission == nullptr ||
+        txCompletion == nullptr ||
+        rxSubmission == nullptr ||
+        rxCompletion == nullptr) {
+
+        IOLog(
+            "AIRPLAY AWDL NATIVE: queue creation FAILED "
+            "txs=%p txc=%p rxs=%p rxc=%p\n",
+            txSubmission,
+            txCompletion,
+            rxSubmission,
+            rxCompletion
+        );
+
+        if (txSubmission != nullptr)
+            txSubmission->release();
+
+        if (txCompletion != nullptr)
+            txCompletion->release();
+
+        if (rxSubmission != nullptr)
+            rxSubmission->release();
+
+        if (rxCompletion != nullptr)
+            rxCompletion->release();
+
+        pool->release();
+        return false;
+    }
+
+    IOSkywalkPacketQueue *queues[4] = {
+        txSubmission,
+        txCompletion,
+        rxSubmission,
+        rxCompletion
+    };
+
+    IOSkywalkEthernetInterface::RegistrationInfo info = {};
+    memset(&info, 0, sizeof(info));
+
+    if (!awdl->initRegistrationInfo(
+            &info,
+            1,
+            sizeof(info))) {
+
+        IOLog(
+            "AIRPLAY AWDL NATIVE: initRegistrationInfo FAILED\n"
+        );
+
+        txSubmission->release();
+        txCompletion->release();
+        rxSubmission->release();
+        rxCompletion->release();
+        pool->release();
+        return false;
+    }
+
+    /*
+     * Sonoma 14.8.7 native AWDL RegistrationInfo layout recovered
+     * from the BCM reference implementation.
+     *
+     * initRegistrationInfo() establishes the base structure first.
+     * We then apply only fields for which we have strong native AWDL
+     * evidence.
+     */
+    UInt8 *raw = reinterpret_cast<UInt8 *>(&info);
+
+    *reinterpret_cast<UInt32 *>(raw + 0x0c) = 3;
+    *reinterpret_cast<UInt32 *>(raw + 0x14) = 2;
+
+    *reinterpret_cast<UInt32 *>(raw + 0x24) = 0x80;
+    *reinterpret_cast<UInt32 *>(raw + 0x28) = 0x80;
+
+    *reinterpret_cast<const char **>(raw + 0x30) = "awdl";
+
+    *reinterpret_cast<UInt32 *>(raw + 0x38) = 0;
+    *reinterpret_cast<UInt32 *>(raw + 0x3c) = 0x40;
+
+    /*
+     * Do NOT write +0x40 yet.  The BCM implementation derives that
+     * field conditionally and we have not proved which native branch
+     * should apply to Intel.
+     */
+
+    *reinterpret_cast<UInt32 *>(raw + 0x48) = 1428;
+    *reinterpret_cast<UInt32 *>(raw + 0x4c) = 1428;
+
+#if __IO80211_TARGET >= __MAC_14_4
+    ether_addr selfAddress = awdl->getSelfMacAddr();
+
+    memcpy(
+        raw + 0x108,
+        selfAddress.octet,
+        sizeof(selfAddress.octet)
+    );
+#else
+    ether_addr *selfAddress = awdl->getSelfMacAddr();
+
+    if (selfAddress == nullptr) {
+        IOLog(
+            "AIRPLAY AWDL NATIVE: getSelfMacAddr returned NULL\n"
+        );
+
+        txSubmission->release();
+        txCompletion->release();
+        rxSubmission->release();
+        rxCompletion->release();
+        pool->release();
+        return false;
+    }
+
+    memcpy(
+        raw + 0x108,
+        selfAddress->octet,
+        sizeof(selfAddress->octet)
+    );
+#endif
+
+    IOLog(
+        "AIRPLAY AWDL NATIVE: calling registerEthernetInterface "
+        "queues=4 pool=%p\n",
+        pool
+    );
+
+    IOReturn registerResult =
+        awdl->registerEthernetInterface(
+            &info,
+            queues,
+            4,
+            pool,
+            pool,
+            0
+        );
+
+    IOLog(
+        "AIRPLAY AWDL NATIVE: registerEthernetInterface "
+        "RETURN=0x%x\n",
+        registerResult
+    );
+
+    /*
+     * On failure nothing should own our resource references.
+     * Release everything.
+     *
+     * On success intentionally retain our creation references for
+     * this first boot experiment.  This avoids introducing a lifetime
+     * assumption before we verify native registration.  It is a tiny
+     * one-interface leak that disappears on reboot and can be cleaned
+     * up once registration is proven.
+     */
+    if (registerResult != kIOReturnSuccess) {
+        txSubmission->release();
+        txCompletion->release();
+        rxSubmission->release();
+        rxCompletion->release();
+        pool->release();
+        return false;
+    }
+
+    IOLog(
+        "AIRPLAY AWDL NATIVE: registration SUCCESS this=%p\n",
+        awdl
+    );
+
+    return true;
+}
+
+
+bool
+AirportItlwmAWDLInterface::attach(IOService *provider)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeAttachEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: attach ENTER this=%p provider=%p\n",
+        this,
+        provider
+    );
+
+    bool result =
+        IO80211VirtualInterface::attach(provider);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: attach RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeAttachReturn",
+        result ? 1 : 0
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::start(IOService *provider)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeStartEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: start ENTER this=%p provider=%p\n",
+        this,
+        provider
+    );
+
+    bool result =
+        IO80211VirtualInterface::start(provider);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: start RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeStartReturn",
+        result ? 1 : 0
+    );
+
+    if (result) {
+        bool nativeRegistered =
+            airplayRegisterNativeAWDL(this);
+
+        airplayLifeProperty(
+            this,
+            "AIRPLAYNativeRegistrationSuccess",
+            nativeRegistered ? 1 : 0
+        );
+
+        IOLog(
+            "AIRPLAY AWDL LIFE: native registration=%d this=%p\n",
+            nativeRegistered ? 1 : 0,
+            this
+        );
+
+        IOLog(
+            "AIRPLAY AWDL LIFE: publishing synchronously "
+            "then setRunningState(false) this=%p\n",
+            this
+        );
+
+        registerService(kIOServiceSynchronous);
+        setRunningState(false);
+    }
+
+    return result;
+}
+
+
+IOReturn
+AirportItlwmAWDLInterface::enable(UInt value)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeEnableEnter", 1);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: enable ENTER this=%p value=%u\n",
+        this,
+        (unsigned int)value
+    );
+
+    IOReturn result =
+        IO80211VirtualInterface::enable(value);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: enable RETURN=0x%x this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeEnableReturn",
+        result == kIOReturnSuccess ? 1 : 0
+    );
+
+    return result;
+}
+
+SInt32
+AirportItlwmAWDLInterface::setInterfaceEnable(bool enabled)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeSetEnableEnter", 1);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setInterfaceEnable ENTER this=%p enabled=%d\n",
+        this,
+        enabled
+    );
+
+    SInt32 result =
+        IO80211VirtualInterface::setInterfaceEnable(enabled);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setInterfaceEnable RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeSetEnableCalled",
+        1
+    );
+
+    return result;
+}
+
+SInt32
+AirportItlwmAWDLInterface::setRunningState(bool running)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeRunningEnter", 1);
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeRunningValue",
+        running ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setRunningState ENTER this=%p running=%d\n",
+        this,
+        running ? 1 : 0
+    );
+
+    SInt32 result =
+        IO80211VirtualInterface::setRunningState(running);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setRunningState RETURN=%d this=%p running=%d\n",
+        result,
+        this,
+        running ? 1 : 0
+    );
+
+    return result;
+}
+
+
+void
+AirportItlwmAWDLInterface::setLinkState(
+    IO80211LinkState state,
+    UInt reason)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeLinkStateEnter", 1);
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeLinkStateUp",
+        state == kIO80211NetworkLinkUp ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setLinkState ENTER this=%p state=%u reason=%u\\n",
+        this,
+        (unsigned int)state,
+        (unsigned int)reason
+    );
+
+    IO80211VirtualInterface::setLinkState(state, reason);
+
+    airplayLifeProperty(this, "AIRPLAYLifeLinkStateReturn", 1);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setLinkState RETURN this=%p state=%u reason=%u\\n",
+        this,
+        (unsigned int)state,
+        (unsigned int)reason
+    );
+}
+
+
+void
+AirportItlwmAWDLInterface::setDataPathState(bool state)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeDataPathEnter", 1);
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeDataPathValue",
+        state ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: setDataPathState this=%p state=%d\n",
+        this,
+        state ? 1 : 0
+    );
+
+    IO80211VirtualInterface::setDataPathState(state);
+}
+
+
+
+void
+AirportItlwmAWDLInterface::handleIoctl(
+    ifnet_t interface,
+    unsigned long command,
+    void *data
+)
+{
+    if (
+        data != nullptr &&
+        (
+            command == SIOCSA80211 ||
+            command == SIOCGA80211
+        )
+    ) {
+        auto *req =
+            reinterpret_cast<struct apple80211req *>(data);
+
+        if (
+            command == SIOCGA80211 &&
+            req->req_type == APPLE80211_IOC_SUPPORTED_CHANNELS
+        ) {
+            airplayLifeProperty(
+                this,
+                "AIRPLAYSupportedChannelsHandle",
+                1
+            );
+
+            IOLog(
+                "AIRPLAY SUPPORTED_CHANNELS HANDLE: "
+                "command=%lu req_type=%d req_val=%d req_len=%u\\n",
+                command,
+                req->req_type,
+                req->req_val,
+                req->req_len
+            );
+        }
+
+        if (req->req_type == 349 || req->req_val == 349) {
+            airplayLifeProperty(this, "AIRPLAY349AWDLHandle", 1);
+        }
+
+        if (
+            req->req_type == 119 ||
+            req->req_type == 120 ||
+            req->req_val == 119 ||
+            req->req_val == 120
+        ) {
+            IOLog(
+                "AIRPLAY IOCTL451: command=%lu "
+                "req_type=%d req_val=%d req_len=%u\n",
+                command,
+                req->req_type,
+                req->req_val,
+                req->req_len
+            );
+        }
+    }
+
+    IO80211VirtualInterface::handleIoctl(
+        interface,
+        command,
+        data
+    );
+}
+
+
+void *
+AirportItlwmAWDLInterface::getP2PSkywalkPeerMgr(void)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeGetP2PPeerEnter", 1);
+
+    void *result =
+        IO80211VirtualInterface::getP2PSkywalkPeerMgr();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: getP2PSkywalkPeerMgr RETURN=%p this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeGetP2PPeerNonNull",
+        result != nullptr ? 1 : 0
+    );
+
+    return result;
+}
+
+
+IOReturn
+AirportItlwmAWDLInterface::newUserClient(
+    task_t owningTask,
+    void *securityID,
+    UInt type,
+    OSDictionary *properties,
+    IOUserClient **handler)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeNewUserClientEnter", 1);
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: newUserClient ENTER this=%p type=%u\n",
+        this,
+        (unsigned int)type
+    );
+
+    IOReturn result =
+        IO80211VirtualInterface::newUserClient(
+            owningTask,
+            securityID,
+            type,
+            properties,
+            handler
+        );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: newUserClient RETURN=0x%x handler=%p this=%p\n",
+        result,
+        handler ? *handler : nullptr,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeNewUserClientSuccess",
+        result == kIOReturnSuccess ? 1 : 0
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::prepareBSDInterface(
+    ifnet_t ifp,
+    UInt unit)
+{
+    airplayLifeProperty(this, "AIRPLAYLifePrepareEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: prepareBSDInterface ENTER this=%p ifp=%p unit=%u\n",
+        this,
+        ifp,
+        (unsigned int)unit
+    );
+
+    bool result =
+        IO80211VirtualInterface::prepareBSDInterface(
+            ifp,
+            unit
+        );
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: prepareBSDInterface RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifePrepareReturn",
+        result ? 1 : 0
+    );
+
+    return result;
+}
+
+
+void *
+AirportItlwmAWDLInterface::createPeerManager(void)
+{
+    airplayLifeProperty(this, "AIRPLAYLifePeerEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: createPeerManager ENTER this=%p\n",
+        this
+    );
+
+    void *result =
+        IO80211VirtualInterface::createPeerManager();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: createPeerManager RETURN=%p this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifePeerNonNull",
+        result != nullptr ? 1 : 0
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::attachToBpf(void)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeBpfEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: attachToBpf ENTER this=%p\n",
+        this
+    );
+
+    bool result =
+        IO80211VirtualInterface::attachToBpf();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: attachToBpf RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeBpfReturn",
+        result ? 1 : 0
+    );
+
+    return result;
+}
+
+
+bool
+AirportItlwmAWDLInterface::configureIfnet(void)
+{
+    airplayLifeProperty(this, "AIRPLAYLifeIfnetEnter", 1);
+    IOLog(
+        "AIRPLAY AWDL LIFE: configureIfnet ENTER this=%p\n",
+        this
+    );
+
+    bool result =
+        IO80211VirtualInterface::configureIfnet();
+
+    IOLog(
+        "AIRPLAY AWDL LIFE: configureIfnet RETURN=%d this=%p\n",
+        result,
+        this
+    );
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeIfnetReturn",
+        result ? 1 : 0
+    );
+
+    return result;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getSSID(apple80211_ssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getCHANNEL(apple80211_channel_data *)
+{
+    IOLog("AIRPLAY AWDL API: getCHANNEL\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getBSSID(apple80211_bssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getSTATE(apple80211_state_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_SYNC_PARAMS\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_ENABLED(
+    apple80211_awdl_sync_enabled *data)
+{
+    airplayLifeProperty(this, "AIRPLAYGetSyncEnabledEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYGetSyncEnabledDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYGetSyncEnabledDataNonNull", 1);
+
+    AirportItlwm *owner =
+        OSDynamicCast(AirportItlwm, getProvider());
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYGetSyncEnabledOwnerNonNull",
+        owner != nullptr ? 1 : 0
+    );
+
+    if (owner == nullptr) {
+        IOLog("AIRPLAY AWDL SYNC_ENABLED GET: no AirportItlwm owner\n");
+        return kIOReturnError;
+    }
+
+    data->version = APPLE80211_VERSION;
+    data->unk1 = 0;
+    data->enabled = owner->awdlSyncEnable ? 1 : 0;
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYGetSyncEnabledValue",
+        data->enabled ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL SYNC_ENABLED GET: enabled=%u\n",
+        data->enabled ? 1U : 0U
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(apple80211_awdl_extension_state_machine_parameter *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_ID(apple80211_awdl_election_id *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_ELECTION_ID\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_METRIC(apple80211_awdl_election_metric *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(
+    apple80211_awdl_sync_channel_sequence *data)
+{
+    airplayLifeProperty(this, "AIRPLAYGetChannelSequenceEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYGetChannelSequenceDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYGetChannelSequenceDataNonNull", 1);
+
+    data->version = APPLE80211_VERSION;
+
+    IOLog("AIRPLAY AWDL CHANNEL_SEQUENCE GET: success\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getPEER_CACHE_MAXIMUM_SIZE(apple80211_peer_cache_maximum_size *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_MASTER_CHANNEL\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SYNC_STATE(apple80211_awdl_sync_state *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_SYNC_STATE\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_PRESENCE_MODE(apple80211_awdl_presence_mode *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_PRESENCE_MODE\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ELECTION_PARAMS(apple80211_awdl_election_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DEVICE_CAPABILITIES(apple80211_awdl_device_capabilities *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_SECONDARY_MASTER_CHANNEL(apple80211_awdl_secondary_master_channel *)
+{
+    IOLog("AIRPLAY AWDL API: getAWDL_SECONDARY_MASTER_CHANNEL\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_AF_TX_MODE(apple80211_awdl_af_tx_mode *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_MIN_RATE(apple80211_awdl_min_rate *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_ENCRYPTION_TYPE(apple80211_encrypt *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DEV_STATS(apple80211_awdl_dev_stats *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_CCA(apple80211_awdl_cca *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getAWDL_AF_SECONDARY_PAYLOAD_CAPABILITIES(
+    apple80211_awdl_cap *data)
+{
+    airplayLifeProperty(this, "AIRPLAYGetAFSecondaryCapEnter", 1);
+
+    if (data == nullptr)
+        return kIOReturnBadArgument;
+
+    data->cap = 0;
+
+    airplayLifeProperty(this, "AIRPLAYGetAFSecondaryCapSuccess", 1);
+
+    IOLog(
+        "AIRPLAY AWDL CAP: AF_SECONDARY_PAYLOAD_CAPABILITIES success cap=%u\n",
+        (unsigned int)data->cap
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::getLLW_PARAMS(apple80211_llw_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setSSID(apple80211_ssid_data *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setCHANNEL(apple80211_channel_data *)
+{
+    IOLog("AIRPLAY AWDL API: setCHANNEL\n");
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_PARAMS(apple80211_awdl_sync_params *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetSyncParamsEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetSyncParamsDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetSyncParamsDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL SYNC_PARAMS: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_ENABLED(
+    apple80211_awdl_sync_enabled *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSync117Enter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSync117DataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSync117DataNonNull", 1);
+
+    AirportItlwm *owner =
+        OSDynamicCast(AirportItlwm, getProvider());
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYSync117OwnerNonNull",
+        owner != nullptr ? 1 : 0
+    );
+
+    if (owner == nullptr) {
+        IOLog("AIRPLAY AWDL SYNC_ENABLED SET: no AirportItlwm owner\n");
+        return kIOReturnError;
+    }
+
+    owner->awdlSyncEnable = data->enabled != 0;
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYSync117Enabled",
+        owner->awdlSyncEnable ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL SYNC_ENABLED SET: enabled=%u\n",
+        owner->awdlSyncEnable ? 1U : 0U
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_EXTENSION_STATE_MACHINE_PARAMETERS(
+    apple80211_awdl_extension_state_machine_parameter *data)
+{
+    airplayLifeProperty(this, "AIRPLAYExtensionStateEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYExtensionStateDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYExtensionStateDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL EXTENSION_STATE: unk1=%u unk2=%u unk3=%u unk4=%u\n",
+        (unsigned int)data->unk1,
+        (unsigned int)data->unk2,
+        (unsigned int)data->unk3,
+        (unsigned int)data->unk4
+    );
+
+    airplayLifeProperty(this, "AIRPLAYExtensionStateSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_ID(apple80211_awdl_election_id *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetElectionIDEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetElectionIDDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetElectionIDDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL ELECTION_ID: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_BSSID(apple80211_awdl_bssid *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetBSSIDEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetBSSIDDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetBSSIDDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL BSSID: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_METRIC(
+    apple80211_awdl_election_metric *data)
+{
+    airplayLifeProperty(this, "AIRPLAYElectionMetricEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYElectionMetricDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYElectionMetricDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL ELECTION_METRIC: metric=%u\n",
+        (unsigned int)data->metric
+    );
+
+    airplayLifeProperty(this, "AIRPLAYElectionMetricSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE(
+    apple80211_awdl_sync_channel_sequence *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetChannelSequenceEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetChannelSequenceDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetChannelSequenceDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL CHANNEL_SEQUENCE: length=%u step=%u duplicate=%u fill=%d encoding=%u\n",
+        data->length,
+        data->step_count,
+        data->duplicate_count,
+        data->fill_channel,
+        data->encoding
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_MASTER_CHANNEL(apple80211_awdl_master_channel *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetMasterChannelEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetMasterChannelDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetMasterChannelDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL MASTER_CHANNEL: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_STATE(apple80211_awdl_sync_state *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetSyncStateEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetSyncStateDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetSyncStateDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL SYNC_STATE: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_RSSI_THRESHOLDS(apple80211_awdl_election_rssi_thresholds *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetRSSIThresholdsEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetRSSIThresholdsDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetRSSIThresholdsDataNonNull", 1);
+
+    IOLog("AIRPLAY AWDL RSSI_THRESHOLDS: accepted configuration request\n");
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_PRESENCE_MODE(
+    apple80211_awdl_presence_mode *data)
+{
+    airplayLifeProperty(this, "AIRPLAYPresenceModeEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYPresenceModeDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYPresenceModeDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL PRESENCE_MODE: mode=%u\n",
+        (unsigned int)data->mode
+    );
+
+    airplayLifeProperty(this, "AIRPLAYPresenceModeSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setPEER_CACHE_CONTROL(apple80211_peer_cache_control *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_REQUEST(apple80211_awdl_oob_request *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SYNC_FRAME_TEMPLATE(
+    apple80211_awdl_sync_frame_template *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplateEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplateDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplateDataNonNull", 1);
+
+    if (data->payload == nullptr || data->payload_len == 0) {
+        airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplatePayloadValid", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplatePayloadValid", 1);
+
+    AirportItlwm *owner =
+        OSDynamicCast(AirportItlwm, getProvider());
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYSetSyncFrameTemplateOwnerNonNull",
+        owner != nullptr ? 1 : 0
+    );
+
+    if (owner == nullptr)
+        return kIOReturnError;
+
+    uint8_t *newTemplate =
+        (uint8_t *)IOMalloc(data->payload_len);
+
+    if (newTemplate == nullptr)
+        return kIOReturnNoMemory;
+
+    memcpy(newTemplate, data->payload, data->payload_len);
+
+    if (owner->syncFrameTemplate != nullptr &&
+        owner->syncFrameTemplateLength > 0) {
+        IOFree(
+            owner->syncFrameTemplate,
+            owner->syncFrameTemplateLength
+        );
+    }
+
+    owner->syncFrameTemplate = newTemplate;
+    owner->syncFrameTemplateLength = data->payload_len;
+
+    airplayLifeProperty(this, "AIRPLAYSetSyncFrameTemplateStored", 1);
+
+    IOLog(
+        "AIRPLAY AWDL SYNC_FRAME_TEMPLATE: stored payload_len=%u\n",
+        data->payload_len
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ELECTION_PARAMS(
+    apple80211_awdl_election_params *data)
+{
+    airplayLifeProperty(this, "AIRPLAYElectionEnter", 1);
+    airplayLifeProperty(
+        this,
+        "AIRPLAYElectionDataNonNull",
+        data != nullptr ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL ELECTION_PARAMS: no-op success data=%s\n",
+        data != nullptr ? "non-null" : "null"
+    );
+
+    airplayLifeProperty(this, "AIRPLAYElectionSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_PEER_TRAFFIC_REGISTRATION(
+    apple80211_awdl_peer_traffic_registration *data)
+{
+    airplayLifeProperty(this, "AIRPLAYPeerTrafficEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYPeerTrafficDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYPeerTrafficDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL PEER_TRAFFIC_REGISTRATION: name_len=%u active=%u\n",
+        (unsigned int)data->name_len,
+        (unsigned int)data->active
+    );
+
+    airplayLifeProperty(this, "AIRPLAYPeerTrafficSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_SECONDARY_MASTER_CHANNEL(
+    apple80211_awdl_secondary_master_channel *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSecondaryMasterEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSecondaryMasterDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSecondaryMasterDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL SECONDARY_MASTER_CHANNEL: channel=%u\n",
+        (unsigned int)data->secondary_master_channel
+    );
+
+    airplayLifeProperty(this, "AIRPLAYSecondaryMasterSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_AF_TX_MODE(
+    apple80211_awdl_af_tx_mode *data)
+{
+    airplayLifeProperty(this, "AIRPLAYSetAFTxModeEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYSetAFTxModeDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYSetAFTxModeDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL AF_TX_MODE: mode=%llu\n",
+        (unsigned long long)data->mode
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_MIN_RATE(apple80211_awdl_min_rate *data)
+{
+    airplayLifeProperty(this, "AIRPLAYMinRateEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYMinRateDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYMinRateDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL MIN_RATE: min_rate=%u\n",
+        (unsigned int)data->min_rate
+    );
+
+    airplayLifeProperty(this, "AIRPLAYMinRateSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ENCRYPTION_KEYS(apple80211_key *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_ENCRYPTION_TYPE(apple80211_encrypt *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_AUTO_REQUEST(
+    apple80211_awdl_oob_request *data)
+{
+    airplayLifeProperty(this, "AIRPLAYOobAutoEnter", 1);
+
+    if (data == nullptr) {
+        airplayLifeProperty(this, "AIRPLAYOobAutoDataNonNull", 0);
+        return kIOReturnBadArgument;
+    }
+
+    airplayLifeProperty(this, "AIRPLAYOobAutoDataNonNull", 1);
+
+    IOLog(
+        "AIRPLAY AWDL OOB_AUTO: data_len=%u unk1=%u unk2=%u unk3=%u "
+        "unk4=%u unk5=%u unk6=%u unk7=%u unk9=%u\n",
+        (unsigned int)data->data_len,
+        (unsigned int)data->unk1,
+        (unsigned int)data->unk2,
+        (unsigned int)data->unk3,
+        (unsigned int)data->unk4,
+        (unsigned int)data->unk5,
+        (unsigned int)data->unk6,
+        (unsigned int)data->unk7,
+        (unsigned int)data->unk9
+    );
+
+    airplayLifeProperty(this, "AIRPLAYOobAutoSuccess", 1);
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_TXCAL_PERIOD(apple80211_awdl_txcal_period *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_AWDL_ADVERTISERS(awdl_peer_advert_add *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_DFSP_CONFIG(apple80211_awdl_dfsp_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_DFSP_UCSA_CONFIG(apple80211_awdl_dfsp_ucsa_config *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setCOMPANION_SKYWALK_IF_CREATE(
+    apple80211_companion_skywalk_if_create *data)
+{
+    const UInt32 *raw = reinterpret_cast<const UInt32 *>(data);
+
+    IOLog(
+        "AIRPLAY LLW 293: data=%p field0=%u field1=%u\\n",
+        data,
+        data != nullptr ? raw[0] : 0,
+        data != nullptr ? raw[1] : 0
+    );
+
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_OOB_SEC_PAYLOAD_REQUEST(apple80211_awdl_af_sec_payload_request *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setLLW_PARAMS(apple80211_llw_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setTX_RATE(apple80211_tx_rate *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setP2P_COEX_PROTECTION(
+    apple80211_p2p_coex_protection *data)
+{
+    airplayLifeProperty(this, "AIRPLAYP2PCoexEnter", 1);
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYP2PCoexNonNull",
+        data != nullptr ? 1 : 0
+    );
+
+    IOLog(
+        "AIRPLAY AWDL COEX: P2P_COEX_PROTECTION no-op success\n"
+    );
+
+    return kIOReturnSuccess;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setPSF_DWELL(apple80211_awdl_psf_dwell_params *)
+{
+    return kIOReturnUnsupported;
+}
+
+IOReturn
+AirportItlwmAWDLInterface::setAWDL_RTG_PEER_STATS_CONFIG(apple80211_rtg_peer_stats_cfg *)
+{
+    return kIOReturnUnsupported;
+}
+
+
+SInt32
+AirportItlwmAWDLInterface::initBSDInterfaceParameters(
+    ifnet_init_eparams *params,
+    sockaddr_dl **sdl
+)
+{
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeInitBSDEnter",
+        1
+    );
+
+    SInt32 result =
+        IO80211VirtualInterface::initBSDInterfaceParameters(
+            params,
+            sdl
+        );
+
+    UInt8 returnValue = (result == 0) ? 1 : 0;
+
+    airplayLifeProperty(
+        this,
+        "AIRPLAYLifeInitBSDReturn",
+        returnValue
+    );
+
+    return result;
+}

@@ -24,7 +24,7 @@ We only accept bug reports in GitHub Issues, before opening an issue, you're rec
 
 ## Credits
 
-- [KGB](https://github.com/acidanthera) for direct code and for various behavioral guidance [AirportItlwm-Tahoe](https://github.com/kgp-macPro/AirportItlwm-Tahoe)
+- [KGB](https://github.com/kgp-macPro/) for direct code and inspiration [AirportItlwm-Tahoe](https://github.com/kgp-macPro/AirportItlwm-Tahoe)
 - [Acidanthera](https://github.com/acidanthera) for [MacKernelSDK](https://github.com/acidanthera/MacKernelSDK)
 - [Apple](https://www.apple.com) for [macOS](https://www.apple.com/macos)
 - [AppleIntelWiFi](https://github.com/AppleIntelWiFi) for [Black80211-Catalina](https://github.com/AppleIntelWiFi/Black80211-Catalina)

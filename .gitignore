@@ -1,0 +1,52 @@
+# Hidden files, assistant metadata and local settings
+.*
+!.gitignore
+AGENTS.md
+CLAUDE.md
+*Claude*
+*claude*
+*Codex*
+*codex*
+*Cursor*
+*cursor*
+
+# Intel firmware binaries (retained locally for building)
+itlwm/firmware/
+*.ucode
+
+# Archives and compiled binaries
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.bin
+*.fw
+*.a
+*.o
+*.dylib
+*.so
+*.dll
+*.exe
+*.kext/
+*.dSYM/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+
+# Historical backups and local output
+*.preFIX*
+*.before*
+*.backup*
+*.bak
+*.orig
+*.old
+*.log
+*.patch
+*.diff
+*~
+build/
+builds/
+DerivedData/
+xcuserdata/

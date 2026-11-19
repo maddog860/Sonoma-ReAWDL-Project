@@ -219,7 +219,7 @@ Special thanks go to the developers and researchers whose work helped make these
 
 ## Project Development
 
-### NorthKoreanNoodles (Maddog860)
+### BringBackPhysicalMedia (Maddog860)
 
 Project direction, extensive hardware testing, experimental design, troubleshooting, and validation of driver changes.
 
